@@ -6,16 +6,15 @@ app = FastAPI()
 
 API_KEY = os.getenv("BYBIT_API_KEY")
 API_SECRET = os.getenv("BYBIT_API_SECRET")
-BASE = "https://api.bybit.com"  # valós tőzsde Spot API
+BASE = "https://api.bybit.com"  # Valós tőzsde
 
-SYMBOL = "SOLUSDC"   # Spot pár
-QTY = 0.05           # fél 0.1 SOL
+SYMBOL = "SOLUSDC"
+QTY = 0.02
 
-# --- Aláírás generálása Bybit API-hoz ---
 def sign_request(timestamp, body_str=""):
     return hmac.new(
         API_SECRET.encode(),
-        (timestamp + API_KEY + body_str).encode(),
+        (timestamp + API_KEY + "5000" + body_str).encode(),
         hashlib.sha256
     ).hexdigest()
 
@@ -28,7 +27,6 @@ def bybit_headers(timestamp, body_str):
         "Content-Type": "application/json"
     }
 
-# --- Spot megrendelés küldése ---
 def send_order(side):
     endpoint = "/v5/order/create"
     timestamp = str(int(time.time() * 1000))
@@ -38,34 +36,29 @@ def send_order(side):
         "symbol": SYMBOL,
         "side": side,
         "orderType": "Market",
-        "qty": str(QTY)
+        "qty": QTY
     }
 
     body_str = json.dumps(body)
     headers = bybit_headers(timestamp, body_str)
     r = requests.post(BASE + endpoint, json=body, headers=headers)
-
     try:
         return r.json()
     except:
-        return {"error": "Cannot decode response", "response_text": r.text}
+        return {"error": "Nem sikerült feldolgozni a Bybit választ", "raw_response": r.text}
 
-# --- Webhook endpoint ---
 @app.post("/webhook")
 async def webhook(request: Request):
     data = await request.json()
     action = data.get("action")
 
-    if not action:
-        return {"error": "Missing action field"}
+    if action == "buy":
+        result = send_order("Buy")
+        return {"status": "buy sent", "response": result}
 
-    if action.lower() == "buy":
-        order = send_order("Buy")
-        return {"action": "buy", "order": order}
-
-    elif action.lower() == "sell":
-        order = send_order("Sell")
-        return {"action": "sell", "order": order}
+    elif action == "sell":
+        result = send_order("Sell")
+        return {"status": "sell sent", "response": result}
 
     else:
-        return {"error": "Unknown action"}
+        return {"error": "Ismeretlen action"}
