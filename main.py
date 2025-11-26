@@ -4,13 +4,19 @@ import os
 
 app = FastAPI()
 
+# -----------------------------
+# Bybit API kulcsok (Render környezeti változókból)
+# -----------------------------
 API_KEY = os.getenv("BYBIT_API_KEY")
 API_SECRET = os.getenv("BYBIT_API_SECRET")
-BASE = "https://api.bybit.com"  # Valós tőzsde
+BASE = "https://api.bybit.com"  # Mainnet
 
 SYMBOL = "SOLUSDC"
-QTY = 0.02
+QTY = 0.05
 
+# -----------------------------
+# HMAC aláírás a Bybithez
+# -----------------------------
 def sign_request(timestamp, body_str=""):
     return hmac.new(
         API_SECRET.encode(),
@@ -27,6 +33,9 @@ def bybit_headers(timestamp, body_str):
         "Content-Type": "application/json"
     }
 
+# -----------------------------
+# Spot order küldése
+# -----------------------------
 def send_order(side):
     endpoint = "/v5/order/create"
     timestamp = str(int(time.time() * 1000))
@@ -41,16 +50,24 @@ def send_order(side):
 
     body_str = json.dumps(body)
     headers = bybit_headers(timestamp, body_str)
+
     r = requests.post(BASE + endpoint, json=body, headers=headers)
+
+    # Logoljuk a raw response-ot, hogy lássuk minden visszajelzést
+    print(f"Bybit raw response for {side}: {r.text}")
+
     try:
         return r.json()
-    except:
+    except json.JSONDecodeError:
         return {"error": "Nem sikerült feldolgozni a Bybit választ", "raw_response": r.text}
 
+# -----------------------------
+# FastAPI webhook
+# -----------------------------
 @app.post("/webhook")
 async def webhook(request: Request):
     data = await request.json()
-    action = data.get("action")
+    action = data.get("action", "").lower()
 
     if action == "buy":
         result = send_order("Buy")
@@ -61,4 +78,4 @@ async def webhook(request: Request):
         return {"status": "sell sent", "response": result}
 
     else:
-        return {"error": "Ismeretlen action"}
+        return {"error": "Ismeretlen action. Küldj 'buy' vagy 'sell'"}
