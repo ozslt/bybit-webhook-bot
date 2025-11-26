@@ -26,7 +26,7 @@ def bybit_headers(timestamp, body_str):
 
 def send_order(symbol, side, qty):
     endpoint = "/v5/order/create"
-    timestamp = str(int(time.time()*1000))
+    timestamp = str(int(time.time() * 1000))
 
     body = {
         "category": "linear",
@@ -40,45 +40,11 @@ def send_order(symbol, side, qty):
     body_str = json.dumps(body)
     headers = bybit_headers(timestamp, body_str)
 
-    r = requests.post(BASE + endpoint, json=body, headers=headers)
-    return r.json()
-
-
-def get_entry_price(symbol):
-    endpoint = "/v5/position/list"
-    timestamp = str(int(time.time()*1000))
-
-    params = {
-        "category": "linear",
-        "symbol": symbol
-    }
-
-    query = json.dumps(params)
-    headers = bybit_headers(timestamp, query)
-    r = requests.get(BASE + endpoint, params=params, headers=headers)
-    data = r.json()
-
     try:
-        return float(data["result"]["list"][0]["avgPrice"])
-    except:
-        return None
-
-
-def set_stop_loss(symbol, sl_price):
-    endpoint = "/v5/position/trading-stop"
-    timestamp = str(int(time.time()*1000))
-
-    body = {
-        "category": "linear",
-        "symbol": symbol,
-        "stopLoss": str(sl_price)
-    }
-
-    body_str = json.dumps(body)
-    headers = bybit_headers(timestamp, body_str)
-
-    return requests.post(BASE + endpoint, json=body, headers=headers).json()
-
+        r = requests.post(BASE + endpoint, json=body, headers=headers)
+        return r.json()
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/webhook")
 async def webhook(request: Request):
@@ -88,33 +54,8 @@ async def webhook(request: Request):
     symbol = data.get("symbol")
     qty = data.get("qty")
 
-    if not action or not symbol or not qty:
-        return {"error": "Missing fields"}
-
-    if action.lower() == "buy":
-        send_order(symbol, "Sell", qty)
+    if action and action.lower() == "buy":
         order = send_order(symbol, "Buy", qty)
-        time.sleep(0.5)
+        return {"order": order}
 
-        entry = get_entry_price(symbol)
-        if entry:
-            sl = round(entry * 0.97, 4)
-            sl_res = set_stop_loss(symbol, sl)
-            return {"order": order, "stop_loss": sl_res}
-
-        return {"order": order, "warning": "No entry price found"}
-
-    elif action.lower() == "sell":
-        send_order(symbol, "Buy", qty)
-        order = send_order(symbol, "Sell", qty)
-        time.sleep(0.5)
-
-        entry = get_entry_price(symbol)
-        if entry:
-            sl = round(entry * 1.03, 4)
-            sl_res = set_stop_loss(symbol, sl)
-            return {"order": order, "stop_loss": sl_res}
-
-        return {"order": order, "warning": "No entry price found"}
-
-    return {"error": "Unknown action"}
+    return {"message": "No action taken"}
