@@ -12,7 +12,7 @@ API_SECRET = os.getenv("BYBIT_API_SECRET")
 BASE = "https://api.bybit.com"  # Mainnet
 
 SYMBOL = "SOLUSDC"
-QTY = 0.05
+QTY = 0.1
 
 # -----------------------------
 # HMAC aláírás a Bybithez
